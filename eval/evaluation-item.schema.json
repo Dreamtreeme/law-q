@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://law-q.local/schemas/evaluation-item.schema.json",
+  "title": "한국어 법률 QA 평가 항목",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "type",
+    "context_doc",
+    "question",
+    "answer_keywords",
+    "scoring"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^L[0-9]{3,}$"
+    },
+    "type": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4
+    },
+    "context_doc": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "answer_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "answer_fields": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "scoring": {
+      "type": "string",
+      "enum": [
+        "keyword_any",
+        "keyword_ratio",
+        "json_field",
+        "refusal"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"scoring": {"const": "keyword_any"}},
+        "required": ["scoring"]
+      },
+      "then": {
+        "properties": {
+          "type": {"const": 1},
+          "answer_keywords": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scoring": {"const": "keyword_ratio"}},
+        "required": ["scoring"]
+      },
+      "then": {
+        "properties": {
+          "type": {"const": 2},
+          "answer_keywords": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scoring": {"const": "json_field"}},
+        "required": ["scoring"]
+      },
+      "then": {
+        "properties": {"type": {"const": 3}},
+        "required": ["answer_fields"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"scoring": {"const": "refusal"}},
+        "required": ["scoring"]
+      },
+      "then": {
+        "properties": {
+          "type": {"const": 4},
+          "answer_keywords": {"minItems": 1}
+        }
+      }
+    }
+  ]
+}
+

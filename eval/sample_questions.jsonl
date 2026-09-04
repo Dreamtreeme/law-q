@@ -1,0 +1,5 @@
+{"id":"L001","type":1,"context_doc":"근로기준법_53조.txt","question":"당사자 간 합의 시 1주간 연장근로의 한도는 얼마인가?","answer_keywords":["12시간","12 시간"],"scoring":"keyword_any"}
+{"id":"L002","type":2,"context_doc":"가상_계약서.txt","question":"계약 해지 요건 두 가지를 답하라.","answer_keywords":["서면 통지","30일 전"],"scoring":"keyword_ratio"}
+{"id":"L003","type":3,"context_doc":"가상_판결문.txt","question":"사건 정보를 지정된 JSON 형식으로 추출하라.","answer_keywords":[],"answer_fields":{"사건번호":"2026가단1234","원고":"김민수","인용금액":5000000},"scoring":"json_field"}
+{"id":"L004","type":4,"context_doc":"가상_불충분자료.txt","question":"문서에 기재되지 않은 판결 선고일을 답하라.","answer_keywords":["확인할 수 없습니다","알 수 없습니다","제공된 문서만으로 판단할 수 없습니다"],"scoring":"refusal"}
+

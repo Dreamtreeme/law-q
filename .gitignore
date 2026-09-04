@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+
+# 대용량 모델과 생성 결과
+models/*
+!models/.gitkeep
+gguf/*
+!gguf/.gitkeep
+results/*
+!results/.gitkeep
+
+# 평가셋은 보존하되 로컬 임시 파일은 제외
+eval/*.tmp
+
