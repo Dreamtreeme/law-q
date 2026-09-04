@@ -7,6 +7,8 @@
 ```text
 .
 ├── experiment.yaml       # 실험 대상과 모든 경로/실행 옵션의 단일 설정 지점
+├── experiment.smoke.yaml # Bllossom Q4 종단 스모크 설정
+├── runtime-lock.json     # llama.cpp/CUDA 바이너리 해시와 버전
 ├── models/               # Hugging Face 원본 모델
 ├── gguf/                 # 변환 및 양자화된 GGUF
 ├── eval/                 # 평가셋
@@ -15,6 +17,7 @@
     ├── common.py         # 설정, 실험 매트릭스, 환경 기록 공통 함수
     ├── capture_env.py    # 실행 환경 기록 CLI
     ├── prepare_models.py # HF 다운로드, F16 변환 및 양자화
+    ├── manual_review.py  # 유형 2 블라인드 검토 내보내기·집계
     └── plan_experiments.py
 ```
 
@@ -27,6 +30,7 @@ $pythonExe = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'
 & $pythonExe -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -r requirements-convert.txt
 python scripts\plan_experiments.py
 python scripts\capture_env.py
 ```
@@ -38,7 +42,11 @@ python scripts\capture_env.py
 - `environment.json`: llama.cpp 및 프로젝트 커밋, dirty 여부, GPU/드라이버/VRAM, 실행 시각, OS/Python 정보, 설정 SHA-256
 - `experiment.yaml`: 해당 실행에 실제 사용된 설정 스냅샷
 
-본 실험에서는 재현성을 위해 각 모델의 `revision: main`을 Hugging Face 커밋 SHA로 교체하는 것을 권장합니다.
+모든 모델 revision은 검증된 40자리 Hugging Face 커밋 SHA로 고정되어 있습니다. 다운로드 전에 실제 SHA 해석 여부를 다시 검증합니다.
+
+```powershell
+python scripts\verify_model_revisions.py
+```
 
 ## 모델 다운로드 및 GGUF 생성
 
@@ -51,7 +59,7 @@ python scripts\prepare_models.py
 
 스크립트는 `HF_HUB_ENABLE_HF_TRANSFER=1`을 `huggingface_hub` import 전에 설정합니다. `models/<모델명>/`에 원본을 내려받고 `gguf/<모델명>/`에 F16과 설정된 양자화 파일을 만듭니다. 완료된 다운로드와 0바이트보다 큰 기존 GGUF는 건너뛰며, 미완성 GGUF는 `.partial.gguf`로 분리합니다.
 
-`huggingface_hub` 1.x에서는 `hf_transfer` 지원이 제거되었으므로, 이 프로젝트는 요청한 전송 방식을 유지하기 위해 `huggingface_hub>=0.28,<0.32`를 사용합니다.
+`download.cache_dir`로 Hugging Face 캐시 위치를 지정할 수 있습니다. 현재 Windows 실험 환경은 C: 용량 부족을 피하기 위해 원본, GGUF와 캐시를 `D:/law-q-data/`에 저장합니다. `huggingface_hub`는 converter와 호환되면서 `hf_transfer`를 지원하는 0.x 범위로 제한합니다.
 
 각 실행의 `results/<실행시각>/`에는 다음 기록이 남습니다.
 
@@ -74,6 +82,23 @@ python scripts\score_answers.py `
 ```
 
 지원 방식은 `keyword_any`, `keyword_ratio`, `json_field`, `refusal`입니다. 결과 JSON에는 문항별 점수와 매칭 근거, 유형별 점수, 채점 방식별 점수, 전체 점수, JSON 파싱 실패 및 누락·추가 예측 수가 포함됩니다. 자세한 형식은 `eval/README.md`를 참고하세요.
+
+최종 평가셋은 사실확인 24, 조건적용 12, 정보추출 12, 함정·거부 12문항으로 구성합니다. 참조 문서와 분포를 검사하고 `dataset.lock.json`을 만드는 명령은 다음과 같습니다.
+
+```powershell
+python scripts\validate_dataset.py
+python scripts\validate_dataset.py --config experiment.smoke.yaml
+```
+
+첫 명령은 현재 데이터셋과 참조 문서 해시를 `dataset.lock.json`으로 동결합니다. 동결 후에는 아래 명령으로 잠금 파일을 수정하지 않고 무결성을 확인할 수 있습니다. 본 실험 설정은 잠금 검증이 실패하면 모델 작업 전에 중단됩니다.
+
+```powershell
+python scripts\validate_dataset.py --verify-lock
+```
+
+전체 방법론과 라이선스 판정은 `docs/EXPERIMENT_PROTOCOL.md`, `docs/LICENSE_REVIEW.md`에 기록합니다.
+
+최종 평가셋은 프로젝트 소유자가 실제 법령 원문을 확인해 작성합니다. 합성 4문항은 오직 스모크 테스트용이며, 본 실험용 `eval/questions.jsonl`을 대신하지 않습니다. 스모크 통과 기록은 `docs/SMOKE_TEST_LOG.md`와 `reports/smoke/README.md`에서 확인할 수 있습니다.
 
 ## llama-server 평가 실행
 
@@ -141,6 +166,14 @@ python scripts\run_pipeline.py --run-name experiment-001 --resume
 
 `--run-name` 없이 `--resume`만 사용하면 가장 최근 `pipeline-*` 실행을 선택합니다. CSV에서 `status=success`인 조합은 건너뛰고, 실패·부분 실패·중단 조합은 다시 실행합니다. 재시도 시 해당 조합의 이전 응답·VRAM 원본은 새 시도의 값으로 교체됩니다.
 
+재개할 때 현재 설정과 실행 폴더의 설정 스냅샷 SHA-256이 다르면 실행을 거부합니다. 파일럿은 본 설정을 복제하지 않고 다음처럼 두 조합만 선택합니다.
+
+```powershell
+python scripts\run_pipeline.py --run-name pilot-bllossom-q4-q8 `
+  --only bllossom-3b:Q4_K_M `
+  --only bllossom-3b:Q8_0
+```
+
 CSV에는 단계별 상태, 오류, 정확도와 유형별 점수, TTFT·응답시간, 최대 VRAM, 512/2048/4096별 PP·TG 평균 및 표준편차가 한 행에 저장됩니다. 상세 원본은 같은 실행 폴더의 `evaluations/`, `benchmarks/`, `failures.jsonl`, `pipeline.log`에서 확인할 수 있습니다.
 
 ## 결과 분석 리포트
@@ -167,3 +200,22 @@ python scripts\generate_report.py `
 - `accuracy-vs-speed.svg`, `type-scores-by-quantization.svg`
 
 양자화 손실은 같은 모델의 F16을 우선 기준으로 사용하고, F16 결과가 없으면 Q8을 기준으로 계산합니다. 둘 다 없는 모델은 손실 표에서 제외하고 리포트의 데이터 품질 메모에 기록합니다. 동일 메모리 그룹 허용치는 `experiment.yaml`의 `report.similar_vram_tolerance_mib`에서 조정할 수 있습니다.
+
+## 유형 2 블라인드 수동 검토
+
+본 실험이 끝나면 자동점수 상위 3개 조합의 유형 2 응답을 모델명 없이 내보냅니다. 별칭 대응표는 검토 CSV와 분리해 검토자에게 노출하지 않습니다.
+
+```powershell
+python scripts\manual_review.py export `
+  --input results\experiment-001\results.csv
+```
+
+`type2-blind-review.csv`의 `human_score_0_to_2`, `logical_error_yes_no`, `reviewer_notes`를 작성한 뒤 집계합니다. 0점은 틀림·모순, 1점은 중요한 누락이 있는 부분 정답, 2점은 근거·조건·결론이 모두 타당한 답입니다.
+
+```powershell
+python scripts\manual_review.py summarize `
+  --review results\experiment-001\manual-review\type2-blind-review.csv `
+  --key results\experiment-001\manual-review\type2-blinding-key.json
+```
+
+수동 점수는 별도 CSV/JSON으로 저장되며 자동 점수를 수정하거나 덮어쓰지 않습니다.

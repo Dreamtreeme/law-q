@@ -48,6 +48,38 @@ class RunPipelineTest(unittest.TestCase):
         ordered = run_pipeline.ordered_rows(rows, combinations)
         self.assertEqual([row["model"] for row in ordered], ["a", "b"])
 
+    def test_only_filters_pilot_combinations_in_config_order(self) -> None:
+        combinations = [
+            {"model": "a", "quantization": "Q4"},
+            {"model": "a", "quantization": "Q8"},
+            {"model": "b", "quantization": "Q4"},
+        ]
+        selected = run_pipeline.select_combinations(
+            combinations, ["a:Q8", "a:Q4"]
+        )
+        self.assertEqual(
+            [(item["model"], item["quantization"]) for item in selected],
+            [("a", "Q4"), ("a", "Q8")],
+        )
+
+    def test_only_rejects_unknown_combination(self) -> None:
+        with self.assertRaisesRegex(ValueError, "설정에 없는"):
+            run_pipeline.select_combinations(
+                [{"model": "a", "quantization": "Q4"}], ["a:Q8"]
+            )
+
+    def test_resume_rejects_changed_config_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = root / "experiment.yaml"
+            snapshot = root / "run" / "experiment.yaml"
+            snapshot.parent.mkdir()
+            config_path.write_text("version: 2\n", encoding="utf-8")
+            snapshot.write_text("version: 1\n", encoding="utf-8")
+            config = {"_config_path": str(config_path)}
+            with self.assertRaisesRegex(ValueError, "설정 스냅샷이 다릅니다"):
+                run_pipeline.assert_resume_config_matches(config, snapshot.parent)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "locked_at": "2026-09-05",
+  "llama_cpp": {
+    "tag": "b10809",
+    "commit": "5266f24da75dc449bd56cbed7addb9c8e4a6a73e",
+    "version": "0.4.0-dev",
+    "build": 10809,
+    "toolchain": "Clang 20.1.8 for Windows x86_64",
+    "cuda": "12.4",
+    "archives": [
+      {
+        "name": "llama-b10809-bin-win-cuda-12.4-x64.zip",
+        "size_bytes": 253938543,
+        "sha256": "c77bfcd9ed8d91e8721a2d6a290b907fddd4fa5412a47b21c6fa1709116b85f9"
+      },
+      {
+        "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+        "size_bytes": 391443627,
+        "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+      }
+    ],
+    "binary_sha256": {
+      "llama-server.exe": "cb29f66008d4d73cce17cab2c2569ab318eb244b0b2ca2a15024b44d90dfcd3f",
+      "llama-quantize.exe": "d8996ae5afb8e6f48bb22313351ffd3610f86f2968be65afd788b5883d880796",
+      "llama-bench.exe": "7cc2af4883491c340c34027829c0134ba169b872b97cdc6349685265b8db29b8",
+      "ggml-cuda.dll": "4979b35b2ecab3dded848369eba5ef26d95d2814f1b4606fa6537ba60f34ae3b"
+    }
+  },
+  "python": {
+    "version": "3.13.14",
+    "converter_requirements": "requirements-convert.txt"
+  },
+  "gpu_validation": {
+    "device": "NVIDIA GeForce RTX 3080",
+    "compute_capability": "8.6",
+    "vram_mib_reported_by_llama_cpp": 10239,
+    "cuda_backend_loaded": true
+  }
+}

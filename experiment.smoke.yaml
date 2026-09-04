@@ -1,0 +1,65 @@
+version: 1
+
+paths:
+  llama_cpp: ../llama.cpp
+  llama_quantize: ../llama.cpp/build/bin/Release/llama-quantize.exe
+  llama_server: ../llama.cpp/build/bin/Release/llama-server.exe
+  llama_bench: ../llama.cpp/build/bin/Release/llama-bench.exe
+  models: D:/law-q-data/models
+  gguf: D:/law-q-data/gguf
+  eval: eval
+  results: results
+
+download:
+  max_workers: 8
+  cache_dir: D:/law-q-data/hf-cache
+  require_pinned_revision: true
+  ignore_patterns: ["*.gguf", "*.onnx", "*.h5", "*.msgpack"]
+
+runtime:
+  context_size: 4096
+  gpu_layers: 99
+  threads: 8
+  seed: 42
+  temperature: 0.0
+  max_tokens: 512
+
+server:
+  host: 127.0.0.1
+  port: 18080
+  startup_timeout_seconds: 300
+  health_poll_interval_seconds: 0.5
+  request_timeout_seconds: 300
+  shutdown_timeout_seconds: 15
+  vram_sample_interval_seconds: 0.5
+
+evaluation:
+  dataset: eval/smoke/questions.jsonl
+  dataset_lock: eval/smoke/dataset.lock.json
+  require_dataset_lock: true
+  expected_type_counts: {1: 1, 2: 1, 3: 1, 4: 1}
+  system_prompt: >-
+    제공된 문서만 근거로 질문에 답하세요. 문서에 답의 근거가 없으면
+    추측하지 말고 제공된 문서만으로 확인할 수 없다고 답하세요.
+
+benchmark:
+  prompt_lengths: [512, 2048, 4096]
+  generation_tokens: 128
+  repetitions: 3
+  batch_size: 2048
+  ubatch_size: 512
+  timeout_seconds: 3600
+
+report:
+  speed_context_length: 2048
+  similar_vram_tolerance_mib: 512
+
+quantization:
+  presets:
+    Q4_K_M: Q4_K_M
+
+models:
+  - name: bllossom-3b
+    hf_repo: Bllossom/llama-3.2-Korean-Bllossom-3B
+    revision: e68fbb0d9c2a4031b0d61b14014eac1a4810ac2e
+    quantizations: [Q4_K_M]

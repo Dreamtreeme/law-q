@@ -8,6 +8,7 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import argparse
 import json
 import logging
+import re
 import subprocess
 import sys
 import time
@@ -219,16 +220,39 @@ def download_model(model: dict[str, Any], model_dir: Path, config: dict[str, Any
 
     token = os.environ.get("HF_TOKEN") or None
     download_config = config.get("download", {})
+    require_pinned = bool(download_config.get("require_pinned_revision", False))
+    requested_revision = str(model["revision"])
+    if require_pinned and re.fullmatch(r"[0-9a-f]{40}", requested_revision) is None:
+        raise StageError(
+            f"고정되지 않은 Hugging Face revision입니다: {requested_revision}. "
+            "40자리 소문자 Git SHA가 필요합니다."
+        )
+    cache_dir_value = download_config.get("cache_dir")
+    cache_dir = None
+    if cache_dir_value:
+        candidate = Path(str(cache_dir_value))
+        cache_dir = (
+            candidate
+            if candidate.is_absolute()
+            else (Path(config["_project_root"]) / candidate).resolve()
+        )
+        cache_dir.mkdir(parents=True, exist_ok=True)
     model_dir.mkdir(parents=True, exist_ok=True)
     try:
         info = HfApi().model_info(
-            repo_id=model["hf_repo"], revision=str(model["revision"]), token=token
+            repo_id=model["hf_repo"], revision=requested_revision, token=token
         )
+        if require_pinned and str(info.sha) != requested_revision:
+            raise StageError(
+                f"요청 SHA와 HF가 해석한 SHA가 다릅니다: "
+                f"{requested_revision} != {info.sha}"
+            )
         snapshot_download(
             repo_id=model["hf_repo"],
-            revision=str(model["revision"]),
+            revision=requested_revision,
             repo_type="model",
             local_dir=model_dir,
+            cache_dir=cache_dir,
             token=token,
             max_workers=int(download_config.get("max_workers", 8)),
             ignore_patterns=download_config.get("ignore_patterns"),
@@ -243,6 +267,7 @@ def download_model(model: dict[str, Any], model_dir: Path, config: dict[str, Any
         "hf_repo": model["hf_repo"],
         "requested_revision": str(model["revision"]),
         "resolved_revision": info.sha,
+        "cache_dir": str(cache_dir) if cache_dir else None,
         "completed_at_utc": utc_now(),
     }
     write_json(marker_path, marker)

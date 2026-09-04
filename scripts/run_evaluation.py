@@ -406,7 +406,12 @@ def stream_chat_completion(
             timeout=(10.0, timeout),
         ) as response:
             response.raise_for_status()
-            for raw_line in response.iter_lines(decode_unicode=True):
+            # llama-server does not currently declare an SSE charset.  Letting
+            # requests decode first can therefore select ISO-8859-1; Python's
+            # Unicode splitlines then mistakes UTF-8 continuation bytes such as
+            # 0x85 for line separators and cuts Korean JSON strings in half.
+            # Split the HTTP stream as bytes and decode each complete SSE line.
+            for raw_line in response.iter_lines(decode_unicode=False):
                 if not raw_line:
                     continue
                 line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else raw_line

@@ -16,6 +16,7 @@ from typing import Any
 import prepare_models
 import run_benchmarks
 import run_evaluation
+import validate_dataset
 from common import (
     DEFAULT_CONFIG,
     create_run_directory,
@@ -201,6 +202,19 @@ def resolve_run_directory(
     return candidates[0], True
 
 
+def assert_resume_config_matches(config: dict[str, Any], run_dir: Path) -> None:
+    snapshot = run_dir / "experiment.yaml"
+    if not snapshot.is_file():
+        raise ValueError(f"재개 실행의 설정 스냅샷이 없습니다: {snapshot}")
+    current_hash = hashlib.sha256(Path(config["_config_path"]).read_bytes()).hexdigest()
+    snapshot_hash = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+    if current_hash != snapshot_hash:
+        raise ValueError(
+            "현재 설정과 재개 대상의 설정 스냅샷이 다릅니다. "
+            f"current={current_hash}, snapshot={snapshot_hash}"
+        )
+
+
 def resolve_tools(config: dict[str, Any]) -> dict[str, Any]:
     tools: dict[str, Any] = {}
     try:
@@ -220,6 +234,24 @@ def resolve_tools(config: dict[str, Any]) -> dict[str, Any]:
         dataset_path = run_evaluation.resolve_dataset(config, None)
         tools["dataset_path"] = dataset_path
         tools["dataset"] = load_dataset(dataset_path)
+        evaluation_config = config.get("evaluation", {})
+        if evaluation_config.get("require_dataset_lock", False):
+            lock_value = evaluation_config.get(
+                "dataset_lock", str(dataset_path.parent / "dataset.lock.json")
+            )
+            lock_path = Path(lock_value)
+            if not lock_path.is_absolute():
+                lock_path = Path(config["_project_root"]) / lock_path
+            tools["dataset_lock"] = validate_dataset.assert_dataset_lock(
+                dataset_path,
+                lock_path,
+                {
+                    int(key): int(value)
+                    for key, value in evaluation_config.get(
+                        "expected_type_counts", {}
+                    ).items()
+                },
+            )
     except Exception as error:
         tools["dataset_error"] = error
     return tools
@@ -254,6 +286,14 @@ def prepare_combination(
     if not (model_dir / "config.json").is_file():
         raise prepare_models.StageError(
             f"원본 모델이 없습니다. 단계 1을 먼저 실행하세요: {model_dir}"
+        )
+    marker = prepare_models._matching_download_marker(
+        model_dir / prepare_models.DOWNLOAD_MARKER, model
+    )
+    if marker is None:
+        raise prepare_models.StageError(
+            f"원본 모델의 저장소/revision 검증 마커가 없거나 설정과 다릅니다: "
+            f"{model_dir / prepare_models.DOWNLOAD_MARKER}"
         )
     f16_path = output_dir / f"{model_name}-F16.gguf"
     conversion = prepare_models.convert_model(
@@ -436,11 +476,36 @@ def process_combination(
     return row, failures
 
 
+def select_combinations(
+    combinations: list[dict[str, str]], only: list[str] | None
+) -> list[dict[str, str]]:
+    if not only:
+        return combinations
+    selectors: set[tuple[str, str]] = set()
+    for value in only:
+        model, separator, quantization = value.partition(":")
+        if not separator or not model or not quantization:
+            raise ValueError(f"--only는 MODEL:QUANTIZATION 형식이어야 합니다: {value}")
+        selectors.add((model, quantization))
+    known = {combination_key(item) for item in combinations}
+    unknown = selectors - known
+    if unknown:
+        rendered = ", ".join(f"{model}:{quant}" for model, quant in sorted(unknown))
+        raise ValueError(f"설정에 없는 --only 조합: {rendered}")
+    return [item for item in combinations if combination_key(item) in selectors]
+
+
 def run_pipeline(
-    config: dict[str, Any], run_name: str | None, resume: bool, verbose: bool
+    config: dict[str, Any],
+    run_name: str | None,
+    resume: bool,
+    verbose: bool,
+    only: list[str] | None = None,
 ) -> int:
-    combinations = experiment_matrix(config)
+    combinations = select_combinations(experiment_matrix(config), only)
     run_dir, resumed = resolve_run_directory(config, run_name, resume)
+    if resumed:
+        assert_resume_config_matches(config, run_dir)
     setup_logging(run_dir / "pipeline.log", verbose)
     csv_path = run_dir / "results.csv"
     state_path = run_dir / "pipeline-state.json"
@@ -468,6 +533,28 @@ def run_pipeline(
         "csv_path": str(csv_path.resolve()),
     }
     write_json(state_path, state)
+
+    if "dataset_error" in tools:
+        error = tools["dataset_error"]
+        failure = {
+            "occurred_at_utc": utc_now(),
+            "stage": "dataset_preflight",
+            "error_type": type(error).__name__,
+            "error": str(error),
+            "traceback": "".join(
+                traceback.format_exception(type(error), error, error.__traceback__)
+            ),
+        }
+        append_jsonl(failures_path, failure)
+        state["finished_at_utc"] = utc_now()
+        state["status"] = "failed_preflight"
+        state["error"] = str(error)
+        write_json(state_path, state)
+        print(f"평가셋 사전 검증 실패: {error}", flush=True)
+        return 1
+
+    if "dataset_lock" in tools:
+        write_json(run_dir / "dataset-lock-verification.json", tools["dataset_lock"])
 
     interrupted = False
     for index, combination in enumerate(combinations, start=1):
@@ -567,9 +654,17 @@ def main() -> None:
         help="지정 실행 또는 가장 최근 pipeline-* 실행의 성공 조합을 건너뜀",
     )
     parser.add_argument("--verbose", action="store_true", help="상세 로그를 콘솔에도 표시")
+    parser.add_argument(
+        "--only",
+        action="append",
+        metavar="MODEL:QUANTIZATION",
+        help="지정 조합만 실행(여러 번 지정 가능, 파일럿용)",
+    )
     args = parser.parse_args()
     config = load_config(args.config)
-    raise SystemExit(run_pipeline(config, args.run_name, args.resume, args.verbose))
+    raise SystemExit(
+        run_pipeline(config, args.run_name, args.resume, args.verbose, args.only)
+    )
 
 
 if __name__ == "__main__":

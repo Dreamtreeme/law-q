@@ -7,13 +7,16 @@ paths:
   llama_quantize: ../llama.cpp/build/bin/Release/llama-quantize.exe
   llama_server: ../llama.cpp/build/bin/Release/llama-server.exe
   llama_bench: ../llama.cpp/build/bin/Release/llama-bench.exe
-  models: models
-  gguf: gguf
+  # 대용량 원본·GGUF는 여유 공간이 있는 D:에 저장합니다.
+  models: D:/law-q-data/models
+  gguf: D:/law-q-data/gguf
   eval: eval
   results: results
 
 download:
   max_workers: 8
+  cache_dir: D:/law-q-data/hf-cache
+  require_pinned_revision: true
   # 원본 가중치 변환에 불필요한 대용량 산출물은 받지 않습니다.
   ignore_patterns: ["*.gguf", "*.onnx", "*.h5", "*.msgpack"]
 
@@ -36,6 +39,9 @@ server:
 
 evaluation:
   dataset: eval/questions.jsonl
+  dataset_lock: eval/dataset.lock.json
+  require_dataset_lock: true
+  expected_type_counts: {1: 24, 2: 12, 3: 12, 4: 12}
   system_prompt: >-
     제공된 법률 문서만 근거로 질문에 답하세요. 문서에 답의 근거가 없으면
     추측하지 말고 제공된 문서만으로 확인할 수 없다고 답하세요.
@@ -59,24 +65,24 @@ quantization:
     Q8_0: Q8_0
 
 # 모델별 quantizations를 합친 항목이 실제 실험 조합입니다(현재 11개).
-# revision은 본 실험 전에 HF 커밋 SHA로 고정하는 것을 권장합니다.
+# revision은 2026-09-05에 HF API로 실제 해석 여부를 검증한 커밋 SHA입니다.
 models:
   - name: qwen2.5-7b-instruct
     hf_repo: Qwen/Qwen2.5-7B-Instruct
-    revision: main
+    revision: a09a35458c702b33eeacc393d103063234e8bc28
     quantizations: [Q4_K_M, Q5_K_M, Q8_0]
 
   - name: exaone-3.5-7.8b-instruct
     hf_repo: LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct
-    revision: main
+    revision: 553ea250b9a5317231459279d5847d6cf955b9aa
     quantizations: [Q4_K_M, Q5_K_M, Q8_0]
 
   - name: eeve-instruct-10.8b
     hf_repo: yanolja/YanoljaNEXT-EEVE-Instruct-10.8B
-    revision: main
+    revision: b0c26460bf14cd825a3c4df2363cdfd63c47fb96
     quantizations: [Q4_K_M, Q5_K_M]
 
   - name: bllossom-3b
     hf_repo: Bllossom/llama-3.2-Korean-Bllossom-3B
-    revision: main
+    revision: e68fbb0d9c2a4031b0d61b14014eac1a4810ac2e
     quantizations: [Q4_K_M, Q5_K_M, Q8_0]

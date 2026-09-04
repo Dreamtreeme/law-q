@@ -1,0 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# llama.cpp b10809 converter와 Python 3.13에서 검증한 버전입니다.
+numpy==2.5.2
+torch==2.11.0
+sentencepiece==0.2.2
+transformers==4.57.6
+protobuf==4.25.9

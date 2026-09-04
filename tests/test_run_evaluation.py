@@ -15,8 +15,9 @@ import run_evaluation  # noqa: E402
 
 
 class FakeResponse:
-    def __init__(self, lines: list[str]) -> None:
+    def __init__(self, lines: list[str | bytes]) -> None:
         self.lines = lines
+        self.decode_unicode_calls: list[bool] = []
 
     def __enter__(self) -> "FakeResponse":
         return self
@@ -28,6 +29,7 @@ class FakeResponse:
         return None
 
     def iter_lines(self, decode_unicode: bool = False):
+        self.decode_unicode_calls.append(decode_unicode)
         yield from self.lines
 
 
@@ -51,6 +53,25 @@ class RunEvaluationTest(unittest.TestCase):
         self.assertEqual(result["response"], "안녕하세요")
         self.assertEqual(result["ttft_seconds"], 0.25)
         self.assertEqual(result["total_response_seconds"], 0.8)
+        self.assertEqual(response.decode_unicode_calls, [False])
+
+    def test_stream_decodes_korean_sse_only_after_byte_line_split(self) -> None:
+        response = FakeResponse(
+            [
+                'data: {"choices":[{"delta":{"content":"찾았습니다"}}]}'.encode("utf-8"),
+                b"data: [DONE]",
+            ]
+        )
+        ticks = iter([1.0, 1.1, 1.2])
+        with patch.object(run_evaluation.requests, "post", return_value=response):
+            result = run_evaluation.stream_chat_completion(
+                "http://localhost/v1/chat/completions",
+                {"stream": True},
+                timeout=10,
+                clock=lambda: next(ticks),
+            )
+        self.assertEqual(result["response"], "찾았습니다")
+        self.assertEqual(response.decode_unicode_calls, [False])
 
     def test_vram_csv_parser(self) -> None:
         records = run_evaluation.parse_vram_csv(

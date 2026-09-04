@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "validated_at_utc": "2026-09-04T18:44:42.490140+00:00",
+  "status": "success",
+  "dataset": {
+    "path": "questions.jsonl",
+    "sha256": "3616ef3812926d361f3129aa96123f41f6bb33a57d4a3458f1576941cca069f4",
+    "questions": 4,
+    "expected_type_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1
+    },
+    "actual_type_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1
+    }
+  },
+  "documents": {
+    "근로기준법_53조.txt": {
+      "path": "근로기준법_53조.txt",
+      "size_bytes": 133,
+      "characters": 57,
+      "sha256": "306183db0f90e682b14dcb219acf489e3cada4f0d8d0055b0c51a18366ad0e3d"
+    },
+    "가상_계약서.txt": {
+      "path": "가상_계약서.txt",
+      "size_bytes": 161,
+      "characters": 67,
+      "sha256": "11bac3a64992cfb145b6527ce18b0d51fc51847df2a7aeddac3a649acb5f92e1"
+    },
+    "가상_판결문.txt": {
+      "path": "가상_판결문.txt",
+      "size_bytes": 178,
+      "characters": 86,
+      "sha256": "0fe4c5634252e66b5e8770fff14deea092e142570e5d6f1d5d678d18f67a11a6"
+    },
+    "가상_불충분자료.txt": {
+      "path": "가상_불충분자료.txt",
+      "size_bytes": 207,
+      "characters": 89,
+      "sha256": "a55eb7d2979f1175318b1f28035c10f60ac394736ba96b0e4acae8f713cbcd86"
+    }
+  },
+  "issues": []
+}
